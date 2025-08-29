@@ -9,8 +9,8 @@ const router = express.Router()
 // and the redirection to the flow is done 
 
 router.post("/createFlow", ensureAuth,  async (req, res) => {
-  const { question, answer, userId } = req.body;
-// posted to by post Login page to create a new flow 
+  const { question, answer } = req.body;
+// posted to by post Login page to create a new flow
   try {
     const newNode = {
       id: uuidv4(),
@@ -26,7 +26,7 @@ router.post("/createFlow", ensureAuth,  async (req, res) => {
     };
 
     const newFlow = await Flow.create({
-      userId,
+      userId: req.user._id, // Use authenticated user's ID from session
       nodes: [newNode],
       edges: [],
     });
@@ -123,4 +123,50 @@ router.delete("/deleteFlow/:flowId", ensureAuth, async (req, res) => {
 
 
 
-export default router; 
+// Proxy route for Groq API
+router.post("/groq-proxy", ensureAuth, async (req, res) => {
+  try {
+    const { messages, model, temperature, max_tokens } = req.body;
+    
+    // Validate required fields
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
+    
+    // Get Groq API key from environment variables
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) {
+      return res.status(500).json({ error: "Groq API key not configured on server" });
+    }
+    
+    // Make request to Groq API
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: model || "llama-3.1-8b-instant",
+        messages: messages,
+        temperature: temperature !== undefined ? temperature : 0.7,
+        max_tokens: max_tokens || 1024,
+      }),
+    });
+    
+    // Check if the request was successful
+    if (!response.ok) {
+      const errorData = await response.json();
+      return res.status(response.status).json({ error: errorData });
+    }
+    
+    // Return the response from Groq API
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Groq proxy error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+export default router;

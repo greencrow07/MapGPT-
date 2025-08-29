@@ -12,6 +12,7 @@ import "./config/passport.js";
 // Import routes
 import authRoutes from "./routes/auth.js";
 import flowRoutes from "./routes/flow.js"
+import groqRoutes from './routes/groq.js'
 
 
 // Load environment variables
@@ -40,6 +41,7 @@ app.use(passport.session());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/flow", flowRoutes);
+app.use("/api", groqRoutes)
 
 
 

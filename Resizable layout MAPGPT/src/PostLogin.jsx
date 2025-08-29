@@ -18,7 +18,6 @@ export default function PostLogin() {
         const resChat = await axios.post("/flow/createFlow", {
           question: pendingquery,
           answer: ans,
-          userId: resUser.data._id,
         });
 
         if (resChat.status === 201) {
@@ -27,11 +26,18 @@ export default function PostLogin() {
         }
       } catch (err) {
         console.error("Error creating chat:", err);
+        // Handle error appropriately, maybe redirect to login or show error message
+        if (err.response?.status === 401) {
+          navigate("/login");
+        }
       }
     };
 
     if (pendingquery) {
       handlePostLogin();
+    } else {
+      // If there's no pending query, redirect to landing page
+      navigate("/");
     }
   }, [pendingquery, navigate]);
 
