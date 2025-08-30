@@ -43,6 +43,7 @@ app.use("/auth", authRoutes);
 app.use("/flow", flowRoutes);
 app.use("/api", groqRoutes)
 
+app.get("/health", (req, res) => res.send("ok"));
 
 
 
