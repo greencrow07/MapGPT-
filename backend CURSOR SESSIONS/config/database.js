@@ -5,7 +5,6 @@ dotenv.config();
 
 const connectDB = async () => {
   try {
-    // const mongoUrl = process.env.MONGODB_URI || "mongodb://localhost:27017/FLOWDB";
     const mongoUrl = process.env.MONGODB_URI ; 
     const conn = await mongoose.connect(mongoUrl, {
       useNewUrlParser: true,
