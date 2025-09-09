@@ -19,7 +19,6 @@ import RightComponent from "./RightComponents/RightComponent";
 import TextVisualizer from "./RightComponents/Nodes/TextvisualizerNode";
 import { useScrollStore } from "../store/useScrollStore";
 import useParentIdStore from "../store/useParentIdStore";
-import dagre from "dagre";
 
 const nodeTypes = { customNode: TextVisualizer, text: TextVisualizer };
 
@@ -67,7 +66,7 @@ const ResizableLayout = () => {
   useEffect(() => {
     const fetchFlow = async () => {
       try {
-        const res = await axios.get(`flow/fetchFlow/${flowId}`, {
+        const res = await axios.get(`/flow/fetchFlow/${flowId}`, {
           withCredentials: true,
         });
 
@@ -87,11 +86,11 @@ const ResizableLayout = () => {
   async function saveFlow(flowId, updatedNodes, updatedEdges) {
     try {
       const response = await axios.put(
-        `flow/updateFlow/${flowId}`,
+        `/flow/updateFlow/${flowId}`,
         { nodes: updatedNodes, edges: updatedEdges },
         { withCredentials: true }
       );
-      console.log("Flow updated:", response.data);
+      // console.log("Flow updated:", response.data);
       return response.data;
     } catch (error) {
       console.error("Error updating flow:", error);
@@ -140,47 +139,64 @@ const ResizableLayout = () => {
     [setEdges, nodes, flowId]
   );
 
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-  const nodeWidth = 200;
-  const nodeHeight = 100;
-
-  const getLayoutedElements = (nodes, edges, direction = "TB") => {
-    dagreGraph.setGraph({ rankdir: direction }); // "TB" = top-to-bottom
-
-    nodes.forEach((node) => {
-      dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-    });
-
-    edges.forEach((edge) => {
-      dagreGraph.setEdge(edge.source, edge.target);
-    });
-
-    dagre.layout(dagreGraph);
-
-    return nodes.map((node) => {
-      const nodeWithPosition = dagreGraph.node(node.id);
-      node.position = {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
-      };
-      return node;
-    });
-  };
-
-  // add a node (parent is derived from store)
+  // add a node with dynamic positioning
   const handleAddNode = ({ value, answer, tag }) => {
     const newId = uuidv4();
 
-    addNodes([
-      {
-        id: newId,
-        type: "customNode",
-        data: { question: value, answer, tag },
-        position: { x: 200, y: 300 },
-      },
-    ]);
+    // Define layout constants
+    const verticalGap = 150;
+    const horizontalGap = 250;
+    const defaultPosition = { x: 250, y: 50 };
+
+    let newNodePosition = defaultPosition;
+
+    // Position node relative to its parent if a parent exists
+    if (currentParentId) {
+      const parentNode = nodes.find((n) => n.id === currentParentId);
+      if (parentNode) {
+        // Find existing children of this parent
+        const childEdges = edges.filter((e) => e.source === currentParentId);
+
+        if (childEdges.length > 0) {
+          // Parent already has children. Position new node next to the rightmost sibling.
+          const childNodeIds = childEdges.map((e) => e.target);
+          const childNodes = nodes.filter(
+            (n) => childNodeIds.includes(n.id) && n.position
+          );
+
+          if (childNodes.length > 0) {
+            const rightmostChild = childNodes.reduce((prev, current) =>
+              prev.position.x > current.position.x ? prev : current
+            );
+            newNodePosition = {
+              x: rightmostChild.position.x + horizontalGap,
+              y: rightmostChild.position.y,
+            };
+          } else {
+             // Fallback: Position below parent if child nodes are not found
+            newNodePosition = {
+              x: parentNode.position.x,
+              y: parentNode.position.y + verticalGap,
+            };
+          }
+        } else {
+          // This is the first child. Position it directly below the parent.
+          newNodePosition = {
+            x: parentNode.position.x,
+            y: parentNode.position.y + verticalGap,
+          };
+        }
+      }
+    }
+
+    const newNode = {
+      id: newId,
+      type: "customNode",
+      data: { question: value, answer, tag },
+      position: newNodePosition,
+    };
+
+    addNodes([newNode]); // This triggers handleNodesChange, which saves the flow
 
     if (currentParentId) {
       setTimeout(() => {
@@ -188,10 +204,10 @@ const ResizableLayout = () => {
       }, 0);
     }
 
-    // scroll + set parent
     setScrollToId(newId);
     setParentId(newId);
   };
+
 
   // add an edge
   const handleAddEdge = ({ parentId, childId }) => {
@@ -210,7 +226,6 @@ const ResizableLayout = () => {
         animated: true,
         style: { stroke: "#FFFFFF", strokeWidth: 3 },
         markerEnd: { type: "arrowclosed", color: "#FFFFFF" },
-        // type: "smoothstep",
       };
 
       const updated = [...existingEdges, newEdge];
